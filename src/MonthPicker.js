@@ -283,12 +283,15 @@ along with this program.  If not, see
             MaxMonth: null,
             Duration: 'normal',
             Button: _makeDefaultButton,
-            ButtonIcon: 'ui-icon-calculator'
+            ButtonIcon: 'ui-icon-calculator',
+			MultiSelect: false,
+			Separate: ","
         },
 
         _monthPickerButton: $(),
         _validationMessage: $(),
-        _selectedBtn: $(),
+		_selectedBtn: $(),
+        _selectedBtns: {},
 
         /******* jQuery UI Widget Factory Overrides ********/
 
@@ -865,14 +868,57 @@ along with this program.  If not, see
         _chooseMonth: function (month) {
             var _year = this._getPickerYear();
             var date = new Date(_year, month-1);
-            this.element.val(this._formatMonth( date )).blur();
-            this._updateAlt(0, date);
-
-            _setActive( this._selectedBtn, false );
-            this._selectedBtn = _setActive( $(this._buttons[month-1]), true );
+			
+			this._setActiveAll(this._buttons,false);
+			
+			var key = _year.toString() + month.toString();
+			if(!this._selectedBtns[key]){
+				this._selectedBtns[key] = { 
+					button: $(this._buttons[month-1]), 
+					active: false,
+					year : _year,
+					month: month
+				};
+			}
+			
+			if(this._selectedBtns[key].active)
+				delete this._selectedBtns[key];
+			
+			var finalText = "";
+			for(var keyLoop in this._selectedBtns){
+				if(this._selectedBtns.hasOwnProperty(keyLoop)){
+					finalText += this._formatMonth(new Date(this._selectedBtns[keyLoop].year,this._selectedBtns[keyLoop].month - 1)) + this.options.Separate;
+					
+					if(this._selectedBtns[keyLoop].year == _year){
+						_setActive(this._selectedBtns[keyLoop].button, true);
+					}
+					
+					this._selectedBtns[keyLoop].active = true;
+				}
+			}
+			
+			this.element.val(finalText.slice(0,- 1)).blur();
+			this._updateAlt(0, date);
 
             _event('OnAfterChooseMonth', this)(date);
         },
+
+		
+		_setActiveAll: function(buttons, status){
+			for(var i = 0; i < buttons.length;i++){
+				_setActive($(buttons[i]),status);
+			}
+		},
+		
+		_setAllSelectBtnYear: function(year, status){
+			for(var keyLoop in this._selectedBtns){
+				if(this._selectedBtns.hasOwnProperty(keyLoop)){
+					if(this._selectedBtns[keyLoop].year == year){
+						_setActive(this._selectedBtns[keyLoop].button, status);
+					}
+				}
+			}
+		},
 
         _chooseYear: function (year) {
             this._backToYear = 0;
@@ -953,7 +999,7 @@ along with this program.  If not, see
 
             this._buttons.off(_eventsNs);
 
-            _setActive( this._selectedBtn, false );
+			this._setActiveAll(this._buttons,false);
 
             var _selYear = this.GetSelectedYear();
             var _onClick = $proxy(this._onYearClick, this);
@@ -970,18 +1016,20 @@ along with this program.  If not, see
                     .toggleClass(_todayClass, _year === _thisYear && _todayWithinBounds) // Heighlight the current year.
                     .on(click, { year: _year }, _onClick );
 
+				this._setAllSelectBtnYear(_year,true);
                  // Heighlight the selected year.
-                if (_selWithinBounds && _selYear && _selYear === _year) {
-                    this._selectedBtn = _setActive( _btn , true );
-                }
+                // if (_selWithinBounds && _selYear && _selYear === _year) {
+                    // this._setAllSelectBtnYear(_year,true);
+                // }
 
                 _yearDifferential++;
             }
         },
 
         _onMonthClick: function(event) {
-            this._chooseMonth(event.data.month);
-            this.Close(event);
+			this._chooseMonth(event.data.month);
+			if(!this.options.MultiSelect)
+				this.Close(event);
         },
 
         _onYearClick: function(event) {
@@ -1021,13 +1069,15 @@ along with this program.  If not, see
                 _minDate = this._MinMonth, _maxDate = this._MaxMonth;
 
             // Heighlight the selected month.
-            _setActive( this._selectedBtn, false );
+			this._setActiveAll(this._buttons,false);
+			
             var _sel = this.GetSelectedDate();
             var _withinBounds = _between(_sel ? _toMonth(_sel) : null, _minDate, _maxDate);
 
-            if (_sel && _sel.getFullYear() === _curYear) {
-                this._selectedBtn = _setActive( $(this._buttons[_sel.getMonth()]) , _withinBounds );
-            }
+			this._setAllSelectBtnYear(_curYear,true);
+            // if (_sel && _sel.getFullYear() === _curYear) {
+                 // this._setAllSelectBtnYear(_curYear,true);
+             // }
 
             // Disable the next/prev button if we've reached the min/max year.
             _setDisabled(this._prevButton,  _minDate && _curYear == _toYear(_minDate));
